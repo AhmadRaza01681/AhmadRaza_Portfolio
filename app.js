@@ -53,8 +53,15 @@
       '<a class="btn s" href="mailto:' + esc(p.email) + '">Email me</a><a class="btn s" href="' + esc(p.linkedin) + '" rel="noopener">LinkedIn</a><a class="btn s" href="' + esc(p.github) + '" rel="noopener">GitHub</a></div></div>' +
       '<div class="frame"><img src="' + esc(p.photo) + '" width="640" height="800" alt="Portrait of ' + esc(p.name) + '">' + (p.caption ? '<div class="tag">' + esc(p.caption) + '</div>' : '') + '</div></div></header>' +
       '<main>' + data.blocks.map(block).join('') + '</main>' +
-      '<footer id="contact"><div class="wrap"><h2>Get in touch</h2><p>Open to research collaborations, AI projects and teaching roles.</p><p><a href="mailto:' + esc(p.email) + '">' + esc(p.email) + '</a><button type="button" class="copy" id="copy">Copy</button></p>' +
-      '<p><a href="' + esc(p.linkedin) + '" rel="noopener">LinkedIn</a> · <a href="' + esc(p.github) + '" rel="noopener">GitHub</a></p><p class="fine">© ' + new Date().getFullYear() + ' ' + esc(p.name) + ' · <a href="#admin">Admin login</a></p></div></footer>';
+      '<footer id="contact"><div class="wrap fgrid"><div><h2>Get in touch</h2><p>Open to research collaborations, AI projects and teaching roles. Send a message and it goes straight to my inbox.</p>' +
+      '<p class="cl"><a href="mailto:' + esc(p.email) + '">' + esc(p.email) + '</a><button type="button" class="copy" id="copy">Copy</button></p>' +
+      '<p><a href="' + esc(p.linkedin) + '" rel="noopener">LinkedIn</a> · <a href="' + esc(p.github) + '" rel="noopener">GitHub</a></p></div>' +
+      '<form id="cf" class="cform" novalidate><label class="cf"><span>Your name</span><input name="name" required autocomplete="name"></label>' +
+      '<label class="cf"><span>Your email</span><input name="email" type="email" required autocomplete="email"></label>' +
+      '<label class="cf"><span>Message</span><textarea name="message" rows="5" required></textarea></label>' +
+      '<input type="text" name="_honey" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">' +
+      '<button class="btn p" type="submit">Send message</button><p class="cst" id="cst" role="status"></p></form>' +
+      '<p class="fine wrap-all">© ' + new Date().getFullYear() + ' ' + esc(p.name) + ' · <a href="#admin">Admin login</a></p></div></footer>';
   }
 
   root.addEventListener('click', function (e) {
@@ -62,6 +69,35 @@
     if (c) { filters[c.dataset.b] = c.dataset.f; renderSite(); }
     if (th) { var r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme:dark)').matches; r.dataset.theme = dark ? 'light' : 'dark'; try { localStorage.setItem('theme', r.dataset.theme); } catch (x) {} }
     if (cp) { var m = data.profile.email, done = function () { cp.textContent = 'Copied'; setTimeout(function () { cp.textContent = 'Copy'; }, 2000); }; if (navigator.clipboard) navigator.clipboard.writeText(m).then(done, function () { location.href = 'mailto:' + m; }); else location.href = 'mailto:' + m; }
+  });
+
+  root.addEventListener('submit', function (e) {
+    if (e.target.id !== 'cf') return; e.preventDefault();
+    var f = e.target, st = document.getElementById('cst'), btn = f.querySelector('button[type=submit]');
+    if (!f.checkValidity()) { f.reportValidity(); return; }
+    var fd = new FormData(f), nm = fd.get('name'), ms = fd.get('message'), em = fd.get('email');
+    fd.append('_subject', 'Portfolio message from ' + nm); fd.append('_captcha', 'false'); fd.append('_template', 'table');
+    btn.disabled = true; st.className = 'cst'; st.textContent = 'Sending...';
+    var mail = '<a href="mailto:' + esc(data.profile.email) + '?subject=' + encodeURIComponent('Portfolio message from ' + nm) + '&body=' + encodeURIComponent(ms + '\n\nFrom: ' + nm + ' (' + em + ')') + '">Email me directly instead</a>';
+    function fail(msg) { st.className = 'cst bad'; st.innerHTML = msg + ' ' + mail + '.'; }
+    function backup() {
+      var fr = document.getElementById('cfr'), h = document.createElement('form'), n = 0;
+      if (!fr) { fr = document.createElement('iframe'); fr.name = 'cfr'; fr.id = 'cfr'; fr.hidden = true; fr.title = 'Form delivery'; document.body.appendChild(fr); }
+      h.method = 'POST'; h.action = 'https://formsubmit.co/' + data.profile.email; h.target = 'cfr'; h.hidden = true;
+      fd.forEach(function (v, k) { var i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; h.appendChild(i); n++; });
+      document.body.appendChild(h); h.submit(); setTimeout(function () { h.remove(); }, 4000);
+      f.reset(); st.className = 'cst ok'; st.innerHTML = 'Your message was submitted. If you do not get a reply, ' + mail.replace('Email me directly instead', 'email me directly') + '.';
+    }
+    if (navigator.onLine === false) { fail('You appear to be offline.'); btn.disabled = false; return; }
+    fetch('https://formsubmit.co/ajax/' + data.profile.email, { method: 'POST', headers: { Accept: 'application/json' }, body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.success === true || j.success === 'true') { f.reset(); st.className = 'cst ok'; st.textContent = 'Thanks, your message was sent. I will reply soon.'; return; }
+        var m = String(j.message || '');
+        fail(/activ/i.test(m) ? 'This form needs a one-time activation by the site owner, so your message was not delivered yet.' : 'Could not send (' + esc(m || 'unknown error') + ').');
+      })
+      .catch(function () { try { backup(); } catch (x) { fail('Could not send the form.'); } })
+      .then(function () { btn.disabled = false; });
   });
   try { var th0 = localStorage.getItem('theme'); if (th0) document.documentElement.dataset.theme = th0; } catch (e) {}
 
